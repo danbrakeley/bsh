@@ -1,4 +1,4 @@
-module github.com/danbrakeley/bs
+module github.com/danbrakeley/bsh
 
 go 1.16
 

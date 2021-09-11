@@ -1,4 +1,4 @@
-package bs
+package bsh
 
 import (
 	"bytes"
@@ -7,155 +7,177 @@ import (
 	"io/fs"
 	"io/ioutil"
 	"os"
+	"runtime"
 	"strings"
 )
 
-func Getwd() string {
+// ExeName adds ".exe" to passed string if GOOS is windows
+func ExeName(path string) string {
+	if runtime.GOOS == "windows" {
+		return path + ".exe"
+	}
+	return path
+}
+
+// ExeName adds ".exe" to passed string if GOOS is windows
+func (b *Bsh) ExeName(path string) string {
+	return ExeName(path)
+}
+
+// Getwd is os.Getwd, but with errors handled by this instance of Bsh
+func (b *Bsh) Getwd() string {
 	dir, err := os.Getwd()
 	if err != nil {
-		fnErrorHandler(err)
+		b.Panic(err)
 	}
 	return dir
 }
 
-func Chdir(dir string) {
-	Verbosef("Chdir: %s", dir)
+// Chdir is os.Chdir, but with errors handled by this instance of Bsh
+func (b *Bsh) Chdir(dir string) {
+	b.Verbosef("Chdir: %s", dir)
 	if err := os.Chdir(dir); err != nil {
-		fnErrorHandler(err)
+		b.Panic(err)
 	}
 }
 
-func MkdirAll(dir string) {
-	Verbosef("MkdirAll: %s", dir)
+// MkdirAll is os.MkdirAll, but with errors handled by this instance of Bsh
+func (b *Bsh) MkdirAll(dir string) {
+	b.Verbosef("MkdirAll: %s", dir)
 	if err := os.MkdirAll(dir, os.ModePerm); err != nil {
-		fnErrorHandler(err)
+		b.Panic(err)
 	}
 }
 
-// TODO: if file doesn't exist, don't err
-func Remove(dir string) {
-	Verbosef("Remove: %s", dir)
+// Remove is os.Remove, but with errors handled by this instance of Bsh
+func (b *Bsh) Remove(dir string) {
+	b.Verbosef("Remove: %s", dir)
 	if err := os.Remove(dir); err != nil {
-		fnErrorHandler(err)
+		b.Panic(err)
 	}
 }
 
-func RemoveAll(dir string) {
-	Verbosef("RemoveAll: %s", dir)
+// RemoveAll is os.RemoveAll, but with errors handled by this instance of Bsh
+func (b *Bsh) RemoveAll(dir string) {
+	b.Verbosef("RemoveAll: %s", dir)
 	if err := os.RemoveAll(dir); err != nil {
-		fnErrorHandler(err)
+		b.Panic(err)
 	}
 }
 
-func Exists(path string) bool {
+// Exists checks if this path already exists on disc (as a file or folder or whatever)
+func (b *Bsh) Exists(path string) bool {
 	_, err := os.Stat(path)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			fnErrorHandler(err)
+			b.Panic(err)
 		}
 		return false
 	}
 	return true
 }
 
-func IsFile(path string) bool {
+// IsFile checks if this path is a file (returns false if path doesn't exist, or exists but is a folder)
+func (b *Bsh) IsFile(path string) bool {
 	fi, err := os.Stat(path)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			fnErrorHandler(err)
+			b.Panic(err)
 		}
 		return false
 	}
 	return !fi.IsDir()
 }
 
-func IsDir(path string) bool {
+// IsDir checks if this path is a folder (returns false if path doesn't exist, or exists but is a file)
+func (b *Bsh) IsDir(path string) bool {
 	fi, err := os.Stat(path)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			fnErrorHandler(err)
+			b.Panic(err)
 		}
 		return false
 	}
 	return fi.IsDir()
 }
 
-func Stat(path string) fs.FileInfo {
-	Verbosef("Stat: %s", path)
+// Stat is os.Stat, but with errors handled by this instance of Bsh
+func (b *Bsh) Stat(path string) fs.FileInfo {
+	b.Verbosef("Stat: %s", path)
 	fi, err := os.Stat(path)
 	if err != nil {
-		fnErrorHandler(err)
+		b.Panic(err)
 	}
 	return fi
 }
 
 // Write file (create or truncate)
 
-func Write(path string, contents string) {
-	if err := writeImpl(path, contents, nil, false); err != nil {
-		fnErrorHandler(err)
+func (b *Bsh) Write(path string, contents string) {
+	if err := b.writeImpl(path, contents, nil, false); err != nil {
+		b.Panic(err)
 	}
 }
 
-func Writef(path string, format string, args ...interface{}) {
-	if err := writeImpl(path, fmt.Sprintf(format, args...), nil, false); err != nil {
-		fnErrorHandler(err)
+func (b *Bsh) Writef(path string, format string, args ...interface{}) {
+	if err := b.writeImpl(path, fmt.Sprintf(format, args...), nil, false); err != nil {
+		b.Panic(err)
 	}
 }
 
-func WriteErr(path string, contents string) error {
-	return writeImpl(path, contents, nil, false)
+func (b *Bsh) WriteErr(path string, contents string) error {
+	return b.writeImpl(path, contents, nil, false)
 }
 
-func WriteBytes(path string, b []byte) {
-	if err := writeImpl(path, "", b, false); err != nil {
-		fnErrorHandler(err)
+func (b *Bsh) WriteBytes(path string, data []byte) {
+	if err := b.writeImpl(path, "", data, false); err != nil {
+		b.Panic(err)
 	}
 }
 
-func WriteBytesErr(path string, b []byte) error {
-	return writeImpl(path, "", b, false)
+func (b *Bsh) WriteBytesErr(path string, data []byte) error {
+	return b.writeImpl(path, "", data, false)
 }
 
 // Append file
 
-func Append(path string, contents string) {
-	if err := writeImpl(path, contents, nil, true); err != nil {
-		fnErrorHandler(err)
+func (b *Bsh) Append(path string, contents string) {
+	if err := b.writeImpl(path, contents, nil, true); err != nil {
+		b.Panic(err)
 	}
 }
 
-func Appendf(path string, format string, args ...interface{}) {
-	if err := writeImpl(path, fmt.Sprintf(format, args...), nil, true); err != nil {
-		fnErrorHandler(err)
+func (b *Bsh) Appendf(path string, format string, args ...interface{}) {
+	if err := b.writeImpl(path, fmt.Sprintf(format, args...), nil, true); err != nil {
+		b.Panic(err)
 	}
 }
 
-func AppendErr(path string, contents string) error {
-	return writeImpl(path, contents, nil, true)
+func (b *Bsh) AppendErr(path string, contents string) error {
+	return b.writeImpl(path, contents, nil, true)
 }
 
-func AppendBytes(path string, b []byte) {
-	if err := writeImpl(path, "", b, true); err != nil {
-		fnErrorHandler(err)
+func (b *Bsh) AppendBytes(path string, data []byte) {
+	if err := b.writeImpl(path, "", data, true); err != nil {
+		b.Panic(err)
 	}
 }
 
-func AppendBytesErr(path string, b []byte) error {
-	return writeImpl(path, "", b, true)
+func (b *Bsh) AppendBytesErr(path string, data []byte) error {
+	return b.writeImpl(path, "", data, true)
 }
 
-func writeImpl(path string, str string, b []byte, append bool) error {
-	if len(str) > 0 && len(b) > 0 {
+func (b *Bsh) writeImpl(path string, str string, data []byte, append bool) error {
+	if len(str) > 0 && len(data) > 0 {
 		return fmt.Errorf("this should never happen: writeImpl has both string and []byte")
 	}
 	var f *os.File
 	var err error
 	if append {
-		Verbosef("Append to file: %s", path)
+		b.Verbosef("Append to file: %s", path)
 		f, err = os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	} else {
-		Verbosef("Write to file: %s", path)
+		b.Verbosef("Write to file: %s", path)
 		f, err = os.Create(path)
 	}
 	if err != nil {
@@ -165,7 +187,7 @@ func writeImpl(path string, str string, b []byte, append bool) error {
 	if len(str) > 0 {
 		_, err = io.Copy(f, strings.NewReader(str))
 	} else {
-		_, err = io.Copy(f, bytes.NewReader(b))
+		_, err = io.Copy(f, bytes.NewReader(data))
 	}
 	if err != nil {
 		return err
@@ -175,29 +197,29 @@ func writeImpl(path string, str string, b []byte, append bool) error {
 
 // Read file
 
-func Read(path string) string {
-	str, err := ReadErr(path)
+func (b *Bsh) Read(path string) string {
+	str, err := b.ReadErr(path)
 	if err != nil {
-		fnErrorHandler(err)
+		b.Panic(err)
 	}
 	return str
 }
 
-func ReadErr(path string) (string, error) {
-	b, err := ioutil.ReadFile(path)
+func (b *Bsh) ReadErr(path string) (string, error) {
+	data, err := ioutil.ReadFile(path)
 	if err != nil {
 		return "", err
 	}
 	// TODO: this cast from []byte to string involves an allocation and copy.
 	// Is there a way to skip that work and read straight into a string?
-	return string(b), nil
+	return string(data), nil
 }
 
-func ReadFile(path string) []byte {
-	Verbosef("Read from file: %s", path)
-	b, err := ioutil.ReadFile(path)
+func (b *Bsh) ReadFile(path string) []byte {
+	b.Verbosef("Read from file: %s", path)
+	data, err := ioutil.ReadFile(path)
 	if err != nil {
-		fnErrorHandler(err)
+		b.Panic(err)
 	}
-	return b
+	return data
 }

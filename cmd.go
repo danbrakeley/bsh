@@ -1,4 +1,4 @@
-package bs
+package bsh
 
 import (
 	"errors"
@@ -23,22 +23,27 @@ type Command struct {
 	out        io.Writer // the stdout to attach to this process
 	err        io.Writer // the stderr to attach to this process
 	exitStatus *int      // exit status code
-	fnClose    func()
+
+	// copied from Bsh at creation
+	fnVerbosef func(string, ...interface{})
+	fnPanic    func(error)
 }
 
 // Command starters
 
-func Cmd(command string) *Command {
+func (b *Bsh) Cmd(command string) *Command {
 	return &Command{
-		raw: command,
-		in:  defaultStdin,
-		out: defaultStdout,
-		err: defaultStderr,
+		raw:        command,
+		in:         b.ensureStdin(),
+		out:        b.ensureStdout(),
+		err:        b.ensureStderr(),
+		fnVerbosef: b.Verbosef,
+		fnPanic:    b.Panic,
 	}
 }
 
-func Cmdf(format string, args ...interface{}) *Command {
-	return Cmd(fmt.Sprintf(format, args...))
+func (b *Bsh) Cmdf(format string, args ...interface{}) *Command {
+	return b.Cmd(fmt.Sprintf(format, args...))
 }
 
 // Command modifiers
@@ -86,7 +91,7 @@ func (c *Command) Env(vars ...string) *Command {
 
 func (c *Command) Run() {
 	if err := c.run(); err != nil {
-		fnErrorHandler(err)
+		c.fnPanic(err)
 	}
 }
 
@@ -95,7 +100,7 @@ func (c *Command) RunStr() string {
 	c.out = &b
 	c.err = &b
 	if err := c.run(); err != nil {
-		fnErrorHandler(err)
+		c.fnPanic(err)
 	}
 	return b.String()
 }
@@ -107,14 +112,14 @@ func (c *Command) RunErr() error {
 func (c *Command) RunExitStatus() int {
 	n, err := extractExitStatus(c.run())
 	if err != nil {
-		fnErrorHandler(err)
+		c.fnPanic(err)
 	}
 	return n
 }
 
 func (c *Command) Bash() {
 	if err := c.bash(); err != nil {
-		fnErrorHandler(err)
+		c.fnPanic(err)
 	}
 }
 
@@ -123,7 +128,7 @@ func (c *Command) BashStr() string {
 	c.out = &b
 	c.err = &b
 	if err := c.bash(); err != nil {
-		fnErrorHandler(err)
+		c.fnPanic(err)
 	}
 	return b.String()
 }
@@ -135,7 +140,7 @@ func (c *Command) BashErr() error {
 func (c *Command) BashExitStatus() int {
 	n, err := extractExitStatus(c.bash())
 	if err != nil {
-		fnErrorHandler(err)
+		c.fnPanic(err)
 	}
 	return n
 }
@@ -147,10 +152,10 @@ func (c *Command) run() error {
 	if err != nil {
 		return err
 	}
-	Verbosef("Exec: %s", c.raw)
+	c.fnVerbosef("Exec: %s", c.raw)
 	cmd := exec.Command(args[0], args[1:]...)
 	if len(c.env) > 0 {
-		Verbosef("+Env: %v", c.env)
+		c.fnVerbosef("+Env: %v", c.env)
 		cmd.Env = append(os.Environ(), c.env...)
 	}
 	cmd.Stdin = c.in
@@ -167,10 +172,10 @@ func (c *Command) run() error {
 }
 
 func (c *Command) bash() error {
-	Verbosef("Bash: %s", c.raw)
+	c.fnVerbosef("Bash: %s", c.raw)
 	cmd := exec.Command("bash", "-c", c.raw)
 	if len(c.env) > 0 {
-		Verbosef("+Env: %v", c.env)
+		c.fnVerbosef("+Env: %v", c.env)
 		cmd.Env = append(os.Environ(), c.env...)
 	}
 	cmd.Stdin = c.in
