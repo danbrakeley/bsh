@@ -8,7 +8,7 @@ import (
 	"github.com/magefile/mage/mg"
 )
 
-const altEnvVarName = "BS_VERBOSE_TEST"
+const altEnvVarName = "BSH_VERBOSE_TEST"
 
 func Test_EchoFilter(t *testing.T) {
 	var b bytes.Buffer
