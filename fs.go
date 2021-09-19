@@ -49,6 +49,16 @@ func (b *Bsh) MkdirAll(dir string) {
 	}
 }
 
+// InDir saves the cwd, creates the given path (if needed), cds into the
+// given path, executes the given func, then restores the previous cwd.
+func (b *Bsh) InDir(path string, fn func()) {
+	prev := b.Getwd()
+	b.MkdirAll(path)
+	b.Chdir(path)
+	fn()
+	b.Chdir(prev)
+}
+
 // Remove is os.Remove, but with errors handled by this instance of Bsh
 func (b *Bsh) Remove(dir string) {
 	b.Verbosef("Remove: %s", dir)
