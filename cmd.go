@@ -46,26 +46,38 @@ func (b *Bsh) Cmdf(format string, args ...interface{}) *Command {
 	return b.Cmd(fmt.Sprintf(format, args...))
 }
 
-// Command modifiers
+// Command methods
 
-func (c *Command) In(in io.Reader) *Command {
-	c.in = in
+func (c *Command) StdIn() io.Reader {
+	return c.in
+}
+
+func (c *Command) StdOut() io.Writer {
+	return c.out
+}
+
+func (c *Command) StdErr() io.Writer {
+	return c.err
+}
+
+func (c *Command) In(r io.Reader) *Command {
+	c.in = r
 	return c
 }
 
-func (c *Command) Out(out io.Writer) *Command {
-	c.out = out
+func (c *Command) Out(w io.Writer) *Command {
+	c.out = w
 	return c
 }
 
-func (c *Command) Err(out io.Writer) *Command {
-	c.err = out
+func (c *Command) Err(w io.Writer) *Command {
+	c.err = w
 	return c
 }
 
-func (c *Command) OutErr(out io.Writer) *Command {
-	c.out = out
-	c.err = out
+func (c *Command) OutErr(w io.Writer) *Command {
+	c.out = w
+	c.err = w
 	return c
 }
 
