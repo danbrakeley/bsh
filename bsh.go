@@ -67,6 +67,13 @@ func (b *Bsh) Panic(err error) {
 	}
 }
 
+// Must can be used to wrap errors that you want bsh to handle.
+func (b *Bsh) Must(err error) {
+	if err != nil {
+		b.Panic(err)
+	}
+}
+
 // filter secrets from the output
 
 func (b *Bsh) PushEchoFilter(str string) {
