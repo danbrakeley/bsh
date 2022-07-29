@@ -15,7 +15,7 @@ Features include:
 - Read files to strings (or []byte).
 - Write or Append strings (or []byte) to files.
 - Run commands via bash-like parsing of arguments, with support for redirecting stdin/out/err via io.Reader/Writers.
-- Run commands bash-style pipes by actually invoking bash (works on Windows if you have bash in your path, ie from installing Git for Windows).
+- Run commands bash-style pipes by actually invoking bash (works on Windows if you have bash in your path, eg from installing Git for Windows).
 - Command variants that can return stdout as string, exit code as int, or Go error.
 - Common File/Folder helpers, like Exists, IsFile, IsDir, Getwd, Chdir, Mkdir, MkdirAll, Remove, RemoveAll, etc.
 - Global error handler that allows most `Bsh` commands to not require exlicit error handling.
