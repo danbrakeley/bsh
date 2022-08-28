@@ -25,20 +25,18 @@ type Command struct {
 	exitStatus *int      // exit status code
 
 	// copied from Bsh at creation
-	fnVerbosef func(string, ...interface{})
-	fnPanic    func(error)
+	b *Bsh
 }
 
 // Command starters
 
 func (b *Bsh) Cmd(command string) *Command {
 	return &Command{
-		raw:        command,
-		in:         b.ensureStdin(),
-		out:        b.ensureStdout(),
-		err:        b.ensureStderr(),
-		fnVerbosef: b.Verbosef,
-		fnPanic:    b.Panic,
+		raw: command,
+		in:  b.ensureStdin(),
+		out: b.ensureStdout(),
+		err: b.ensureStderr(),
+		b:   b,
 	}
 }
 
@@ -103,7 +101,8 @@ func (c *Command) Env(vars ...string) *Command {
 
 func (c *Command) Run() {
 	if err := c.run(); err != nil {
-		c.fnPanic(err)
+		c.b.Warnf("unexpected error in %s", c.raw)
+		c.b.Panic(err)
 	}
 }
 
@@ -112,7 +111,8 @@ func (c *Command) RunStr() string {
 	c.out = &b
 	c.err = &b
 	if err := c.run(); err != nil {
-		c.fnPanic(err)
+		c.b.Warnf("unexpected error in %s", c.raw)
+		c.b.Panic(err)
 	}
 	return b.String()
 }
@@ -124,14 +124,16 @@ func (c *Command) RunErr() error {
 func (c *Command) RunExitStatus() int {
 	n, err := extractExitStatus(c.run())
 	if err != nil {
-		c.fnPanic(err)
+		c.b.Warnf("unexpected error in %s", c.raw)
+		c.b.Panic(err)
 	}
 	return n
 }
 
 func (c *Command) Bash() {
 	if err := c.bash(); err != nil {
-		c.fnPanic(err)
+		c.b.Warnf("unexpected error in bash -c %s", c.raw)
+		c.b.Panic(err)
 	}
 }
 
@@ -140,7 +142,8 @@ func (c *Command) BashStr() string {
 	c.out = &b
 	c.err = &b
 	if err := c.bash(); err != nil {
-		c.fnPanic(err)
+		c.b.Warnf("unexpected error in bash -c %s", c.raw)
+		c.b.Panic(err)
 	}
 	return b.String()
 }
@@ -152,7 +155,8 @@ func (c *Command) BashErr() error {
 func (c *Command) BashExitStatus() int {
 	n, err := extractExitStatus(c.bash())
 	if err != nil {
-		c.fnPanic(err)
+		c.b.Warnf("unexpected error in bash -c %s", c.raw)
+		c.b.Panic(err)
 	}
 	return n
 }
@@ -164,10 +168,10 @@ func (c *Command) run() error {
 	if err != nil {
 		return err
 	}
-	c.fnVerbosef("Exec: %s", c.raw)
+	c.b.Verbosef("Exec: %s", c.raw)
 	cmd := exec.Command(args[0], args[1:]...)
 	if len(c.env) > 0 {
-		c.fnVerbosef("+Env: %v", c.env)
+		c.b.Verbosef("+Env: %v", c.env)
 		cmd.Env = append(os.Environ(), c.env...)
 	}
 	cmd.Stdin = c.in
@@ -184,10 +188,10 @@ func (c *Command) run() error {
 }
 
 func (c *Command) bash() error {
-	c.fnVerbosef("Bash: %s", c.raw)
+	c.b.Verbosef("Bash: %s", c.raw)
 	cmd := exec.Command("bash", "-c", c.raw)
 	if len(c.env) > 0 {
-		c.fnVerbosef("+Env: %v", c.env)
+		c.b.Verbosef("+Env: %v", c.env)
 		cmd.Env = append(os.Environ(), c.env...)
 	}
 	cmd.Stdin = c.in
