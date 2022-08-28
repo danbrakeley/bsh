@@ -146,7 +146,7 @@ func (b *Bsh) MustCopy(src, dst string) {
 }
 
 func (b *Bsh) copyImpl(src, dst string) error {
-	b.Verbosef("copy: %s => %s", src, dst)
+	b.Verbosef("Copy: %s => %s", src, dst)
 	sf, err := os.Open(src)
 	if err != nil {
 		if os.IsNotExist(err) {
