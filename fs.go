@@ -121,6 +121,66 @@ func (b *Bsh) Stat(path string) fs.FileInfo {
 	return fi
 }
 
+// File Copy
+
+// Copy attempts to open file at src and create/overwrite new file at dst, then copy the contents.
+// If src does not exist, Copy returns false, otherwise it returns true. Other errors will panic.
+func (b *Bsh) Copy(src, dst string) bool {
+	err := b.copyImpl(src, dst)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false
+		}
+		b.Panic(err)
+	}
+	return true
+}
+
+// MustCopy attempts to open file at src and create/overwrite new file at dst, then copy the contents.
+// Any error in this process will panic.
+func (b *Bsh) MustCopy(src, dst string) {
+	err := b.copyImpl(src, dst)
+	if err != nil {
+		b.Panic(err)
+	}
+}
+
+func (b *Bsh) copyImpl(src, dst string) error {
+	b.Verbosef("copy: %s => %s", src, dst)
+	sf, err := os.Open(src)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return err
+		}
+		return fmt.Errorf("error opening %s: %w", src, err)
+	}
+	defer sf.Close()
+
+	info, err := sf.Stat()
+	if err != nil {
+		return fmt.Errorf("error reading %s: %w", src, err)
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("%s is not a regular file", src)
+	}
+	srcSize := info.Size()
+
+	df, err := os.Create(dst)
+	if err != nil {
+		return fmt.Errorf("error creating %s: %w", dst, err)
+	}
+	defer df.Close()
+
+	dstSize, err := io.Copy(df, sf)
+	if err != nil {
+		return fmt.Errorf("error copying from %s to %s: %w", src, dst, err)
+	}
+	if dstSize != srcSize {
+		return fmt.Errorf("%s has %d byte(s), but the copy %s only has %d byte(s)", src, srcSize, dst, dstSize)
+	}
+	return nil
+}
+
 // Write file (create or truncate)
 
 func (b *Bsh) Write(path string, contents string) {
