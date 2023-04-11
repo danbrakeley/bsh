@@ -18,6 +18,7 @@ import (
 
 type Command struct {
 	raw        string
+	dir        string
 	env        []string
 	in         io.Reader // the stdin to attach to this process
 	out        io.Writer // the stdout to attach to this process
@@ -94,6 +95,12 @@ func (c *Command) ExpandEnv() *Command {
 // Note: these env vars are not seen by ExpandEnv.
 func (c *Command) Env(vars ...string) *Command {
 	c.env = append(c.env, vars...)
+	return c
+}
+
+// Dir sets the working directory
+func (c *Command) Dir(dir string) *Command {
+	c.dir = dir
 	return c
 }
 
@@ -174,6 +181,7 @@ func (c *Command) run() error {
 		c.b.Verbosef("+Env: %v", c.env)
 		cmd.Env = append(os.Environ(), c.env...)
 	}
+	cmd.Dir = c.dir
 	cmd.Stdin = c.in
 	cmd.Stdout = c.out
 	cmd.Stderr = c.err
@@ -194,6 +202,7 @@ func (c *Command) bash() error {
 		c.b.Verbosef("+Env: %v", c.env)
 		cmd.Env = append(os.Environ(), c.env...)
 	}
+	cmd.Dir = c.dir
 	cmd.Stdin = c.in
 	cmd.Stdout = c.out
 	cmd.Stderr = c.err
