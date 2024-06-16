@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"io/ioutil"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 )
@@ -49,14 +49,31 @@ func (b *Bsh) MkdirAll(dir string) {
 	}
 }
 
+func (b *Bsh) Touch(path string) {
+	b.Verbosef("Touch: %s", path)
+
+	dir := filepath.Dir(path)
+	if len(dir) > 0 && dir != "." && dir != "/" && dir != "\\" {
+		if err := os.MkdirAll(dir, os.ModePerm); err != nil {
+			b.Panic(err)
+		}
+	}
+
+	f, err := os.Create(path)
+	if err != nil {
+		b.Panic(err)
+	}
+	f.Close()
+}
+
 // InDir saves the cwd, creates the given path (if needed), cds into the
 // given path, executes the given func, then restores the previous cwd.
 func (b *Bsh) InDir(path string, fn func()) {
 	prev := b.Getwd()
 	b.MkdirAll(path)
 	b.Chdir(path)
+	defer b.Chdir(prev)
 	fn()
-	b.Chdir(prev)
 }
 
 // Remove is os.Remove, but with errors handled by this instance of Bsh
@@ -276,7 +293,7 @@ func (b *Bsh) Read(path string) string {
 }
 
 func (b *Bsh) ReadErr(path string) (string, error) {
-	data, err := ioutil.ReadFile(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return "", err
 	}
@@ -287,7 +304,7 @@ func (b *Bsh) ReadErr(path string) (string, error) {
 
 func (b *Bsh) ReadFile(path string) []byte {
 	b.Verbosef("Read from file: %s", path)
-	data, err := ioutil.ReadFile(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		b.Panic(err)
 	}
