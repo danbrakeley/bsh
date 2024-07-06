@@ -229,14 +229,14 @@ const (
 	ansiCSI   = "\u001b[" // Control Sequence Introducer
 	ansiReset = ansiCSI + "39m"
 
-	ansiBlack       = ansiCSI + "30m"
-	ansiDarkRed     = ansiCSI + "31m"
-	ansiDarkGreen   = ansiCSI + "32m"
-	ansiDarkYellow  = ansiCSI + "33m"
-	ansiDarkBlue    = ansiCSI + "34m"
-	ansiDarkMagenta = ansiCSI + "35m"
-	ansiDarkCyan    = ansiCSI + "36m"
-	ansiLightGray   = ansiCSI + "37m"
+	// ansiBlack       = ansiCSI + "30m"
+	// ansiDarkRed     = ansiCSI + "31m"
+	// ansiDarkGreen   = ansiCSI + "32m"
+	// ansiDarkYellow  = ansiCSI + "33m"
+	// ansiDarkBlue    = ansiCSI + "34m"
+	// ansiDarkMagenta = ansiCSI + "35m"
+	// ansiDarkCyan    = ansiCSI + "36m"
+	// ansiLightGray   = ansiCSI + "37m"
 
 	ansiDarkGray = ansiCSI + "90m"
 	ansiRed      = ansiCSI + "91m"
