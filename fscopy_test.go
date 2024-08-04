@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func Test(t *testing.T) {
+func TestCopyContents(t *testing.T) {
 	b := Bsh{}
 
 	files := []string{

@@ -1,14 +1,12 @@
 package bsh
 
 import (
-	"bytes"
-	"fmt"
-	"io"
+	"errors"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strings"
 )
 
 // ExeName adds ".exe" to passed string if GOOS is windows
@@ -49,6 +47,7 @@ func (b *Bsh) MkdirAll(dir string) {
 	}
 }
 
+// Touch creates a file if it doesn't exist, and creates any intermediate folders needed.
 func (b *Bsh) Touch(path string) {
 	b.Verbosef("Touch: %s", path)
 
@@ -64,16 +63,6 @@ func (b *Bsh) Touch(path string) {
 		b.Panic(err)
 	}
 	f.Close()
-}
-
-// InDir saves the cwd, creates the given path (if needed), cds into the
-// given path, executes the given func, then restores the previous cwd.
-func (b *Bsh) InDir(path string, fn func()) {
-	prev := b.Getwd()
-	b.MkdirAll(path)
-	b.Chdir(path)
-	defer b.Chdir(prev)
-	fn()
 }
 
 // Remove is os.Remove, but with errors handled by this instance of Bsh
@@ -138,218 +127,51 @@ func (b *Bsh) Stat(path string) fs.FileInfo {
 	return fi
 }
 
-// File Copy
+// InDir saves the cwd, creates the given path (if needed), cds into the
+// given path, executes the given func, then restores the previous cwd.
+func (b *Bsh) InDir(path string, fn func()) {
+	// no need to verbose anything here, as MkdirAll and/or Chdir will verbose for us
+	prev := b.Getwd()
+	if !b.Exists(path) {
+		b.MkdirAll(path)
+	}
+	b.Chdir(path)
+	defer b.Chdir(prev)
+	fn()
+}
 
-// Copy attempts to open file at src and create/overwrite new file at dst, then copy the contents.
-// If src does not exist, Copy returns false, otherwise it returns true. Other errors will panic.
-func (b *Bsh) Copy(src, dst string) bool {
-	err := b.copyImpl(src, dst)
+// MkdirTemp creates a new temp folder and returns its path and a cleanup function.
+// The cleanup function deletes the temp folder and all its contents.
+func (b *Bsh) MkdirTemp() (tmpdir string, cleanup func()) {
+	ostmp := os.TempDir()
+	tmpdir, err := os.MkdirTemp(ostmp, "bsh_*")
 	if err != nil {
-		if os.IsNotExist(err) {
+		b.Panic(err)
+	}
+	b.Verbosef("MkdirTemp: %s", tmpdir)
+	return tmpdir, func() {
+		b.RemoveAll(tmpdir)
+	}
+}
+
+// InTempDir is like InDir, but uses a unique and newly created temp folder
+// instead of a passed folder name.
+// The temp folder is deleted before this func returns.
+func (b *Bsh) InTempDir(fn func()) {
+	tmpdir, cleanup := b.MkdirTemp()
+	defer cleanup()
+	b.InDir(tmpdir, fn)
+}
+
+// IsExeInPath calls exec.LookPath to locate an executable in the PATH environment var.
+// Returns true if the given executable is found, otherwise false.
+func (b *Bsh) IsExeInPath(file string) bool {
+	path, err := exec.LookPath(file)
+	if err != nil {
+		if errors.Is(err, exec.ErrNotFound) {
 			return false
 		}
 		b.Panic(err)
 	}
-	return true
-}
-
-// MustCopy attempts to open file at src and create/overwrite new file at dst, then copy the contents.
-// Any error in this process will panic.
-func (b *Bsh) MustCopy(src, dst string) {
-	err := b.copyImpl(src, dst)
-	if err != nil {
-		b.Panic(err)
-	}
-}
-
-// CopyContents finds all files/folders contained in src, and copies them into dst.
-// Src and dst must both exist and be folders. Duplicates in dst will be overwritten.
-func (b *Bsh) CopyContents(src, dst string) {
-	if !b.IsDir(src) {
-		b.Panic(fmt.Errorf("src %s is not a folder or does not exist", src))
-	}
-	if !b.IsDir(dst) {
-		b.Panic(fmt.Errorf("dst %s is not a folder or does not exist", dst))
-	}
-
-	toCopy := make([]copyEntry, 0, 1024)
-	toCopy = b.buildCopyList(src, dst, toCopy)
-	for _, entry := range toCopy {
-		if entry.isDir {
-			b.MkdirAll(entry.dstPath)
-		} else {
-			b.MustCopy(entry.srcPath, entry.dstPath)
-		}
-	}
-}
-
-type copyEntry struct {
-	srcPath string
-	dstPath string
-	isDir   bool
-}
-
-func (b *Bsh) buildCopyList(src, dst string, files []copyEntry) []copyEntry {
-	contents, err := os.ReadDir(src)
-	if err != nil {
-		b.Panic(err)
-	}
-	for _, entry := range contents {
-		srcPath := filepath.Join(src, entry.Name())
-		dstPath := filepath.Join(dst, entry.Name())
-		files = append(files, copyEntry{srcPath, dstPath, entry.IsDir()})
-		if entry.IsDir() {
-			files = b.buildCopyList(srcPath, dstPath, files)
-		}
-	}
-	return files
-}
-
-func (b *Bsh) copyImpl(src, dst string) error {
-	b.Verbosef("Copy: %s => %s", src, dst)
-	sf, err := os.Open(src)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return err
-		}
-		return fmt.Errorf("error opening src %s: %w", src, err)
-	}
-	defer sf.Close()
-
-	info, err := sf.Stat()
-	if err != nil {
-		return fmt.Errorf("error reading src %s: %w", src, err)
-	}
-	if !info.Mode().IsRegular() {
-		return fmt.Errorf("%s is not a regular file", src)
-	}
-	srcSize := info.Size()
-
-	df, err := os.Create(dst)
-	if err != nil {
-		return fmt.Errorf("error creating dst %s: %w", dst, err)
-	}
-	defer df.Close()
-
-	dstSize, err := io.Copy(df, sf)
-	if err != nil {
-		return fmt.Errorf("error copying from src %s to dst %s: %w", src, dst, err)
-	}
-	if dstSize != srcSize {
-		return fmt.Errorf("%s has %d byte(s), but the copy %s only has %d byte(s)", src, srcSize, dst, dstSize)
-	}
-	return nil
-}
-
-// Write file (create or truncate)
-
-func (b *Bsh) Write(path string, contents string) {
-	if err := b.writeImpl(path, contents, nil, false); err != nil {
-		b.Panic(err)
-	}
-}
-
-func (b *Bsh) Writef(path string, format string, args ...interface{}) {
-	if err := b.writeImpl(path, fmt.Sprintf(format, args...), nil, false); err != nil {
-		b.Panic(err)
-	}
-}
-
-func (b *Bsh) WriteErr(path string, contents string) error {
-	return b.writeImpl(path, contents, nil, false)
-}
-
-func (b *Bsh) WriteBytes(path string, data []byte) {
-	if err := b.writeImpl(path, "", data, false); err != nil {
-		b.Panic(err)
-	}
-}
-
-func (b *Bsh) WriteBytesErr(path string, data []byte) error {
-	return b.writeImpl(path, "", data, false)
-}
-
-// Append file
-
-func (b *Bsh) Append(path string, contents string) {
-	if err := b.writeImpl(path, contents, nil, true); err != nil {
-		b.Panic(err)
-	}
-}
-
-func (b *Bsh) Appendf(path string, format string, args ...interface{}) {
-	if err := b.writeImpl(path, fmt.Sprintf(format, args...), nil, true); err != nil {
-		b.Panic(err)
-	}
-}
-
-func (b *Bsh) AppendErr(path string, contents string) error {
-	return b.writeImpl(path, contents, nil, true)
-}
-
-func (b *Bsh) AppendBytes(path string, data []byte) {
-	if err := b.writeImpl(path, "", data, true); err != nil {
-		b.Panic(err)
-	}
-}
-
-func (b *Bsh) AppendBytesErr(path string, data []byte) error {
-	return b.writeImpl(path, "", data, true)
-}
-
-func (b *Bsh) writeImpl(path string, str string, data []byte, append bool) error {
-	if len(str) > 0 && len(data) > 0 {
-		return fmt.Errorf("this should never happen: writeImpl has both string and []byte")
-	}
-	var f *os.File
-	var err error
-	if append {
-		b.Verbosef("Append to file: %s", path)
-		f, err = os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-	} else {
-		b.Verbosef("Write to file: %s", path)
-		f, err = os.Create(path)
-	}
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	if len(str) > 0 {
-		_, err = io.Copy(f, strings.NewReader(str))
-	} else {
-		_, err = io.Copy(f, bytes.NewReader(data))
-	}
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-// Read file
-
-func (b *Bsh) Read(path string) string {
-	str, err := b.ReadErr(path)
-	if err != nil {
-		b.Panic(err)
-	}
-	return str
-}
-
-func (b *Bsh) ReadErr(path string) (string, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return "", err
-	}
-	// TODO: this cast from []byte to string involves an allocation and copy.
-	// Is there a way to skip that work and read straight into a string?
-	return string(data), nil
-}
-
-func (b *Bsh) ReadFile(path string) []byte {
-	b.Verbosef("Read from file: %s", path)
-	data, err := os.ReadFile(path)
-	if err != nil {
-		b.Panic(err)
-	}
-	return data
+	return len(path) > 0
 }
